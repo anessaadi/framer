@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Custom Frame Picture Editor</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        #editor {
+            position: relative;
+            width: 400px;
+            height: 400px;
+            overflow: hidden;
+            background-color: rgba(0, 0, 0, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 1px solid #ccc;
+        }
+
+        #frame {
+            position: absolute;
+            width: 400px;
+            height: 100%;
+            z-index: 2;
+            pointer-events: none;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        #picture {
+            position: absolute;
+            object-fit: cover;
+            cursor: grab;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-wrapper label {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .file-input-wrapper label:hover {
+            background-color: #0056b3;
+        }
+
+        button {
+            padding: 10px 20px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div id="editor">
+        <img id="picture" src="https://via.placeholder.com/500" alt="Your Picture">
+        <div id="frame"></div>
+    </div>
+    <div class="controls">
+        <div class="file-input-wrapper">
+            <input type="file" id="uploadPicture" accept="image/*">
+            <label for="uploadPicture">Upload Picture</label>
+        </div>
+        <div class="file-input-wrapper">
+            <input type="file" id="uploadFrame" accept="image/*">
+            <label for="uploadFrame">Upload Frame</label>
+        </div>
+        <button id="downloadBtn">Download</button>
+    </div>
+
+    <script>
+        const picture = document.getElementById('picture');
+        const frame = document.getElementById('frame');
+        const editor = document.getElementById('editor');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const uploadPictureInput = document.getElementById('uploadPicture');
+        const uploadFrameInput = document.getElementById('uploadFrame');
+
+        let scale = 1;
+        let posX = 0;
+        let posY = 0;
+        let isDragging = false;
+        let startX, startY;
+        let frameImage = null;
+
+        // Predefined frame source
+        const predefinedFrameSrc = 'frame001.png'; // Replace with your frame image URL
+
+        // Predefine the frame and initialize frameImage
+        frame.style.backgroundImage = `url(${predefinedFrameSrc})`;
+        frameImage = new Image();
+        frameImage.onload = () => {
+            console.log('Predefined frame loaded and ready');
+        };
+        frameImage.src = predefinedFrameSrc;
+
+        // Handle picture upload
+        uploadPictureInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    picture.src = event.target.result;
+                    resetImagePosition();
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Handle frame upload
+        uploadFrameInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    frameImage = new Image();
+                    frameImage.onload = () => {
+                        frame.style.backgroundImage = `url(${event.target.result})`;
+                    };
+                    frameImage.src = event.target.result;
+                    frameImage.crossOrigin="anonymous";
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        function resetImagePosition() {
+            scale = 1;
+            posX = 0;
+            posY = 0;
+            picture.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        }
+
+        // Handle zooming with scroll
+        editor.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            scale += e.deltaY > 0 ? -zoomSpeed : zoomSpeed;
+            scale = Math.max(0.5, Math.min(scale, 3)); // Limit zoom
+            picture.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        });
+
+        // Handle dragging
+        picture.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startX = e.clientX - posX;
+            startY = e.clientY - posY;
+            picture.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            posX = e.clientX - startX;
+            posY = e.clientY - startY;
+            picture.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            picture.style.cursor = 'grab';
+        });
+
+        // Download updated image
+        downloadBtn.addEventListener('click', () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            const editorRect = editor.getBoundingClientRect();
+            const pictureRect = picture.getBoundingClientRect();
+
+            canvas.width = editorRect.width;
+            canvas.height = editorRect.height;
+
+            const scaleFactorX = picture.naturalWidth / pictureRect.width;
+            const scaleFactorY = picture.naturalHeight / pictureRect.height;
+
+            const offsetX = (editorRect.left - pictureRect.left) * scaleFactorX;
+            const offsetY = (editorRect.top - pictureRect.top) * scaleFactorY;
+
+            // Draw the picture
+            ctx.drawImage(
+                picture,
+                offsetX,
+                offsetY,
+                editorRect.width * scaleFactorX,
+                editorRect.height * scaleFactorY,
+                0,
+                0,
+                canvas.width,
+                canvas.height
+            );
+
+            // Draw the frame
+            if (frameImage) {
+                ctx.drawImage(
+                    frameImage,
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                );
+            }
+
+            // Save the image
+            const link = document.createElement('a');
+            link.download = 'framed_picture.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        });
+    </script>
+</body>
+</html>
